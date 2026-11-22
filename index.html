@@ -698,6 +698,14 @@ html.m-mode .cols>aside>.study-card{display:block}
 .gate-box input{font-size:1.2rem;text-align:center;letter-spacing:.12em;padding:12px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);text-transform:uppercase}
 .gate-box input:focus{outline:none;border-color:var(--accent)}
 .gate-msg{color:#c0392b;min-height:1.2em;margin:0}
+.cloud-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;background:var(--surface-2);border-radius:12px;padding:10px 12px;margin:10px 0;font-size:.88rem;font-weight:600}
+.gate-box input[type=tel],.gate-box input[type=text]:not(#gatecode){letter-spacing:.02em;text-transform:none}
+.teacher .t-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.t-table{border-collapse:collapse;width:100%;min-width:760px;font-size:.88rem}
+.t-table th,.t-table td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+.t-table th{background:var(--surface-2);position:sticky;top:0}
+.t-table tr.ok td{background:color-mix(in srgb,#2ecc71 12%,transparent)}
+.gate-box [hidden]{display:none !important}
 
 </style>
 </head>
@@ -2190,7 +2198,7 @@ S.clinic.landInvested = Number(S.clinic.landInvested)||0;
 S.daily = Object.assign(freshDaily(), S.daily||{});
 S.daily.claimed = Object.assign({}, S.daily.claimed||{});
 if(S.daily.day!==localDayKey()) S.daily=freshDaily();
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+function save(){ try{ S._savedAt=Date.now(); localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} try{ fbQueue(); }catch(e){} }
 function clinicActivity(message, icon="🏗️"){
   S.activity=Array.isArray(S.activity)?S.activity:[];
   S.activity.unshift({message:String(message),icon,nick:S.nick||"Bir öğrenci",at:Date.now()});
@@ -2365,6 +2373,7 @@ function pickBalanced(pool, n){
 const NET = {db:null, user:null, uid:null, canWrite:null, rows:null, activityRows:null, status:"loading", readOnly:false};
 let activityEl=null;
 async function initNet(){
+  try{ if(FB.want){ NET.status="loading"; refreshBoard(); return; } }catch(e){}
   try{
     if(!window.claude || !window.claude.use){ NET.status="off"; refreshBoard(); return; }
     const [db,user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
@@ -2385,6 +2394,7 @@ async function initNet(){
 let pushing=false, pushAgain=false;
 async function pushBoard(){
   if(DEMO) return;
+  try{ if(FB.want){ fbQueue(); return; } }catch(e){}
   if(!NET.db || !NET.uid || NET.readOnly) return;
   if(!S.onBoard || !S.nick || S.games<1) return;
   if(pushing){ pushAgain=true; return; }
@@ -4090,8 +4100,8 @@ function profileScreen(){
   const row=(t,fn)=>h("button",{class:"m-row",onclick:fn},t);
   screen(h("div",{class:"wrap narrow m-page"},
     h("div",{class:"m-pcard"}, h("span",{class:"avatar"},S.avatar||"🦷"), h("div",null, h("b",null,S.nick||"Takma adın yok"), h("p",{class:"small muted"},`${S.title?S.title+" · ":""}${lv.title} · ${fmt(S.xp)} XP · 🪙 ${fmt(S.coins)}`))),
-    h("div",{class:"m-plist"},
-      row("⚙️ Ayarlar ve takma ad",openSettings), row("📋 Skor kartım (öğretmene gönder)",scoreCard),
+    cloudStatusRow(), h("div",{class:"m-plist"},
+      row("⚙️ Ayarlar ve takma ad",openSettings), row("👩‍🏫 Öğretmen paneli",teacherPanel), row("📋 Skor kartım (öğretmene gönder)",scoreCard),
       row("📚 Alet atlası",atlas), row("🗂 Bilgi kartları",study),
       row("🖥 Web (bilgisayar) görünümüne geç",()=>setView("web")),
       DEMO? row("🧪 Demodan çık",exitDemo) : row("🧪 Demo modunu aç",()=>{ try{ localStorage.setItem("tepsi.mode","demo"); }catch(e){} location.reload(); })),
@@ -4241,13 +4251,120 @@ function gateScreen(){
   CUR_TAB=null;
   const inp=h("input",{type:"text",id:"gatecode",autocomplete:"off",autocapitalize:"characters",spellcheck:"false",placeholder:"Sınıf kodu","aria-label":"Sınıf kodu"});
   const msg=h("p",{class:"small gate-msg","aria-live":"polite"});
-  const go=()=>{ if(gateHash(gateNorm(inp.value))===GATE_HASH){ try{ localStorage.setItem("tepsi.gate",GATE_HASH); }catch(e){} home(); toast("Hoş geldin! 🦷"); } else { msg.textContent="Kod yanlış. Kodu öğretmeninden alabilirsin."; inp.select(); } };
+  const go=()=>{ if(gateHash(gateNorm(inp.value))===GATE_HASH){ try{ localStorage.setItem("tepsi.gate",GATE_HASH); localStorage.setItem("tepsi.ck",gateHash(gateNorm(inp.value)+"|fb")); }catch(e){} if(FB.want && !accSaved()) accountScreen(); else { home(); toast("Hoş geldin! 🦷"); } } else { msg.textContent="Kod yanlış. Kodu öğretmeninden alabilirsin."; inp.select(); } };
   inp.addEventListener("keydown",e=>{ if(e.key==="Enter") go(); });
   screen(h("div",{class:"wrap narrow gate"}, h("div",{class:"gate-box"},
     h("div",{class:"gate-logo","aria-hidden":"true"},"🦷"), h("h1",null,"Tepsi"),
     h("p",{class:"muted"},"Bu oyun yalnızca sınıfımızın öğrencilerine açıktır. Öğretmeninin verdiği sınıf kodunu gir."),
     inp, h("button",{class:"btn",onclick:go},"Giriş yap"), msg)));
   setTimeout(()=>inp.focus(),50);
+}
+
+/* ---------- Firebase: sınıf hesabı, bulut kaydı, sınıf tablosu, öğretmen paneli ---------- */
+const FB_CONFIG={apiKey:"AIzaSyD-EbQfCanYPlRFjh12YipXVqPXchfLHQk",authDomain:"tepsi-1b2cb.firebaseapp.com",projectId:"tepsi-1b2cb",storageBucket:"tepsi-1b2cb.firebasestorage.app",messagingSenderId:"116373282940",appId:"1:116373282940:web:76a84a729ee55a0a9f69f9"};
+const TEACHER_HASH="88418-193714d7";
+const FB={want:false, ready:false, db:null, uid:null, acc:null, pub:null, ck:null, err:null, lastPush:0};
+try{ FB.want = !DEMO && (/github\.io$/.test(location.hostname) || localStorage.getItem("tepsi.fbforce")==="1"); }catch(e){}
+function accSaved(){ try{ return !!JSON.parse(localStorage.getItem("tepsi.acc")||"null"); }catch(e){ return false; } }
+function fbLoadScripts(){ const base="https://www.gstatic.com/firebasejs/10.12.2/";
+  return ["firebase-app-compat.js","firebase-auth-compat.js","firebase-firestore-compat.js"].reduce((p,f)=>p.then(()=>new Promise((res,rej)=>{ if(window.firebase && f!=="firebase-app-compat.js" && ((f.includes("auth")&&firebase.auth)||(f.includes("firestore")&&firebase.firestore))) return res(); const s=document.createElement("script"); s.src=base+f; s.onload=res; s.onerror=()=>rej(new Error("Bağlantı kurulamadı.")); document.head.append(s); })), Promise.resolve()); }
+let fbInitP=null;
+function fbInit(){ if(!FB.want) return Promise.resolve(false); if(FB.ready) return Promise.resolve(true); if(fbInitP) return fbInitP;
+  fbInitP=(window.firebase && firebase.apps? Promise.resolve() : fbLoadScripts()).then(()=>{ if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG); FB.db=firebase.firestore(); return firebase.auth().signInAnonymously(); })
+    .then(cred=>{ FB.uid=(cred&&cred.user&&cred.user.uid)||((firebase.auth().currentUser||{}).uid)||null; FB.ready=true; FB.err=null; return true; })
+    .catch(e=>{ FB.err=String((e&&e.message)||e); fbInitP=null; console.warn("Firebase",e); return false; });
+  return fbInitP; }
+function fbCls(){ return FB.db.collection("classes").doc(FB.ck); }
+function fbKeys(nick,pin){ const ck=localStorage.getItem("tepsi.ck")||""; const n=gateNorm(nick);
+  return {ck, acc:gateHash(ck+"|"+n+"|"+pin)+gateHash(n+"|"+pin+"|a"), pub:gateHash(ck+"|"+n+"|pub")}; }
+function applyRestored(cloud){
+  S=Object.assign(freshProfile(), cloud);
+  S.inv=Object.assign({hint:0,half:0,time:0,shield:0,double:0},S.inv||{});
+  S.owned=Object.assign({avatar:["🦷"],title:[""],theme:["nane"]},S.owned||{});
+  SEL=new Set((S.sel||[]).filter(id=>MOD[id])); if(!SEL.size) MODS.forEach(m=>SEL.add(m.id));
+  try{ applyTheme(); }catch(e){} }
+function fbSummary(){ const lv=levelOf(S.xp); const mods={}; Object.entries(S.stats||{}).forEach(([m,st])=>{ if(st&&st.a) mods[m]=[st.a,st.c]; });
+  let L={pts:0,tier:0}; try{ L=leagueState(); }catch(e){}
+  return {nick:String(S.nick||"Adsız").slice(0,24), xp:S.xp||0, level:lv.title, games:S.games||0, avatar:S.avatar||"🦷", title:S.title||"",
+    acc:S.answered?Math.round(100*S.correct/S.answered):0, answered:S.answered||0, week:weekKey(), weekPts:L.pts||0, tier:L.tier||0,
+    rep:clinicRep(), snap:clinicSnap(), streak:streakNow(), today:studyToday(), day:new Date().toDateString(), mods, updatedAt:Date.now()}; }
+let fbTimer=null;
+function fbQueue(){ if(!FB.want||DEMO||!FB.acc) return; clearTimeout(fbTimer); fbTimer=setTimeout(fbPushNow,4000); }
+async function fbPushNow(){ if(!FB.ready||!FB.acc||DEMO) return;
+  try{ await fbCls().collection("accounts").doc(FB.acc).set({nick:String(S.nick||""), save:JSON.stringify(S), v:Date.now()});
+       await fbCls().collection("players").doc(FB.pub).set(JSON.parse(JSON.stringify(fbSummary())));
+       FB.lastPush=Date.now(); FB.err=null; }catch(e){ FB.err=String((e&&e.message)||e); console.warn("Bulut kaydı",e); } }
+let fbUnsub=null;
+function fbListen(){ if(!FB.ready||!FB.ck||fbUnsub) return;
+  fbUnsub=fbCls().collection("players").orderBy("xp","desc").limit(200).onSnapshot(snap=>{
+    NET.rows=snap.docs.map(d=>Object.assign({id:d.id},d.data())); NET.uid=FB.pub; NET.db={fb:true}; NET.readOnly=false; NET.status="ok"; refreshBoard();
+  }, err=>{ console.warn(err); NET.status="err"; refreshBoard(); }); }
+async function fbLogin(nick,pin){
+  const ok=await fbInit(); if(!ok) throw new Error("Sunucuya bağlanılamadı. İnternetini kontrol edip tekrar dene.");
+  const k=fbKeys(nick,pin); FB.ck=k.ck;
+  const a=await fbCls().collection("accounts").doc(k.acc).get();
+  let keepNick=null;
+  if(a.exists){ let cloud=null; try{ cloud=JSON.parse(a.data().save||"null"); }catch(e){}
+    keepNick=(cloud&&cloud.nick)||a.data().nick||null;
+    if(cloud && (cloud.xp||0) >= (S.xp||0)) applyRestored(cloud); }
+  else { const p=await fbCls().collection("players").doc(k.pub).get();
+    if(p.exists) throw new Error("Bu takma ad sınıfta kullanılıyor. PIN’in yanlışsa tekrar dene; yeni hesapsa başka bir ad seç."); }
+  S.nick=String(keepNick||nick).trim().slice(0,24); S.onBoard=true;
+  localStorage.setItem("tepsi.acc",JSON.stringify({nick:S.nick,acc:k.acc,pub:k.pub}));
+  FB.acc=k.acc; FB.pub=k.pub; save(); await fbPushNow(); fbListen(); }
+async function fbBoot(){
+  const ok=await fbInit(); if(!ok) return;
+  let a=null; try{ a=JSON.parse(localStorage.getItem("tepsi.acc")||"null"); }catch(e){} if(!a) return;
+  FB.acc=a.acc; FB.pub=a.pub; FB.ck=localStorage.getItem("tepsi.ck");
+  try{ const d=await fbCls().collection("accounts").doc(FB.acc).get();
+    if(d.exists && (d.data().v||0) > (S._savedAt||0)+3000){ const c=JSON.parse(d.data().save||"null");
+      if(c){ applyRestored(c); try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} if(CUR_TAB==="home") home(); toast("☁️ İlerlemen buluttan yüklendi."); } } }catch(e){ console.warn(e); }
+  fbListen(); fbQueue(); }
+function fbLogout(){ ask("Hesaptan çıkılsın mı?","Bu cihazdaki ilerleme silinir; buluttaki kaydın durur. Aynı takma ad ve PIN ile istediğin zaman geri girebilirsin.","Çıkış yap",()=>{ try{ localStorage.removeItem("tepsi.acc"); localStorage.removeItem(KEY); }catch(e){} location.reload(); }); }
+function accountScreen(){
+  CUR_TAB=null;
+  const nk=h("input",{type:"text",maxlength:"20",placeholder:"Takma ad (ör. DavyeKralı)",autocomplete:"off",spellcheck:"false","aria-label":"Takma ad"}); nk.value=S.nick||"";
+  const pin=h("input",{type:"tel",inputmode:"numeric",maxlength:"4",placeholder:"4 haneli PIN",autocomplete:"off","aria-label":"PIN"});
+  const msg=h("p",{class:"small gate-msg","aria-live":"polite"});
+  const skip=h("button",{class:"btn ghost sm",hidden:true,onclick:()=>home()},"Şimdilik bağlantısız oyna");
+  const btn=h("button",{class:"btn"},"Devam et");
+  const go=async()=>{ const n=nk.value.trim(), p=pin.value.trim();
+    if(n.length<3){ msg.textContent="Takma ad en az 3 harf olmalı."; return; } if(!/^\d{4}$/.test(p)){ msg.textContent="PIN 4 rakamdan oluşmalı."; return; }
+    btn.disabled=true; msg.textContent="Bağlanıyor…";
+    try{ await fbLogin(n,p); toast(`Hoş geldin ${S.nick}! İlerlemen buluta kaydediliyor ☁️`); home(); }
+    catch(e){ msg.textContent=(e&&e.message)||"Bağlanamadı."; btn.disabled=false; if(FB.err) skip.hidden=false; } };
+  btn.onclick=go; pin.addEventListener("keydown",e=>{ if(e.key==="Enter") go(); });
+  screen(h("div",{class:"wrap narrow gate"}, h("div",{class:"gate-box"}, h("div",{class:"gate-logo","aria-hidden":"true"},"☁️"), h("h1",null,"Sınıf hesabın"),
+    h("p",{class:"muted"},"Bir takma ad ve 4 haneli PIN belirle. Başka bir telefondan ya da bilgisayardan aynı ad ve PIN ile girersen ilerlemen kaldığı yerden devam eder. Gerçek adını yazma; PIN’ini kimseyle paylaşma."),
+    nk, pin, btn, msg, skip)));
+  setTimeout(()=>nk.focus(),50);
+}
+function cloudStatusRow(){ if(!FB.want) return null; let a=null; try{ a=JSON.parse(localStorage.getItem("tepsi.acc")||"null"); }catch(e){}
+  return h("div",{class:"cloud-row"}, h("span",null, a? (FB.err? `⚠️ Bulut: ${a.nick} · bağlantı sorunu, tekrar denenecek` : `☁️ Bulut: ${a.nick} olarak bağlı`+(FB.lastPush?` · son kayıt ${new Date(FB.lastPush).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}`:"")) : "☁️ Bulut hesabı yok"),
+    a? h("button",{class:"btn ghost sm",onclick:fbLogout},"Çıkış yap") : h("button",{class:"btn ghost sm",onclick:accountScreen},"Hesap aç / gir")); }
+function teacherPanel(){
+  const inp=h("input",{type:"password",placeholder:"Öğretmen kodu","aria-label":"Öğretmen kodu"}); const msg=h("p",{class:"small gate-msg"});
+  const close=()=>m.remove();
+  const open=()=>{ if(gateHash(gateNorm(inp.value))!==TEACHER_HASH){ msg.textContent="Kod yanlış."; return; } close(); teacherScreen(); };
+  inp.addEventListener("keydown",e=>{ if(e.key==="Enter") open(); });
+  const m=h("div",{class:"modal",role:"dialog","aria-modal":"true",onclick:e=>{ if(e.target===m) close(); }}, h("div",{class:"box"}, h("h3",null,"👩‍🏫 Öğretmen paneli"), inp, msg,
+    h("div",{class:"row",style:{justifyContent:"flex-end",gap:"8px",marginTop:"10px"}}, h("button",{class:"btn ghost",onclick:close},"Vazgeç"), h("button",{class:"btn",onclick:open},"Aç"))));
+  document.body.append(m); setTimeout(()=>inp.focus(),50);
+}
+function teacherScreen(){
+  CUR_TAB=null;
+  const TODAY=new Date().toDateString(); const tdy=r=>r.day===TODAY?(r.today||0):0;
+  const rows=(NET.rows||[]).slice().sort((a,b)=>String(a.nick||"").localeCompare(String(b.nick||""),"tr"));
+  const ago=t=>{ if(!t) return "—"; const mi=Math.round((Date.now()-t)/60000); return mi<60? `${mi} dk önce` : mi<1440? `${Math.round(mi/60)} sa önce` : `${Math.round(mi/1440)} gün önce`; };
+  const weak=r=>{ const e=Object.entries(r.mods||{}).filter(([m,v])=>v[0]>=5&&MOD[m]).map(([m,v])=>[m,v[1]/v[0]]).sort((a,b)=>a[1]-b[1])[0]; return e? `${MOD[e[0]].name} (%${Math.round(e[1]*100)})` : "—"; };
+  const csv=["Takma ad\tSeviye\tXP\tÇözülen soru\tDoğruluk %\tBugün\tSeri gün\tSon giriş\tEn zayıf bölüm"].concat(rows.map(r=>[r.nick,r.level,r.xp,r.answered,r.acc,tdy(r),r.streak,ago(r.updatedAt),weak(r)].join("\t"))).join("\n");
+  screen(h("div",{class:"wrap teacher"},
+    h("div",{class:"ghead"}, h("button",{class:"btn ghost",onclick:home},"← Ana sayfa"), h("span",{class:"t"},"👩‍🏫 Öğretmen paneli"), h("span",{class:"small muted"},`${rows.length} öğrenci`)),
+    rows.length? null : h("p",{class:"muted"}, FB.want? "Henüz kayıtlı öğrenci yok ya da bağlantı kuruluyor. Birkaç saniye sonra ↻ Yenile’ye bas." : "Öğretmen paneli GitHub sitesinde, Firebase bağlantısıyla çalışır."),
+    h("div",{class:"t-scroll"}, h("table",{class:"t-table"}, h("thead",null,h("tr",null,...["Takma ad","Seviye","XP","Soru","Doğruluk","Bugün","Seri","Son giriş","En zayıf bölüm"].map(t=>h("th",null,t)))),
+      h("tbody",null, rows.map(r=>h("tr",{class:tdy(r)>=STUDY_GOAL?"ok":""}, h("td",null,String(r.nick||"")), h("td",null,String(r.level||"")), h("td",null,fmt(r.xp||0)), h("td",null,fmt(r.answered||0)), h("td",null,`%${r.acc||0}`), h("td",null,`${tdy(r)}/${STUDY_GOAL}`), h("td",null,(r.streak?`🔥 ${r.streak}`:"—")), h("td",null,ago(r.updatedAt)), h("td",null,weak(r))))))),
+    h("div",{class:"row",style:{gap:"8px",marginTop:"12px",flexWrap:"wrap"}}, h("button",{class:"btn",onclick:async()=>{ try{ await navigator.clipboard.writeText(csv); toast("Tablo kopyalandı; Excel’e yapıştırabilirsin."); }catch(e){ toast("Kopyalanamadı."); } }},"📋 Tabloyu kopyala (Excel)"), h("button",{class:"btn ghost",onclick:teacherScreen},"↻ Yenile")),
+    h("p",{class:"small muted"},"Yeşil satırlar bugünkü çalışma hedefini tamamlayan öğrencilerdir.")));
 }
 
 /* ---------- settings ---------- */
@@ -4259,15 +4376,16 @@ function openSettings(){
     h("div",{class:"box"},
       h("h3",{id:"st"},"Oyuncu ayarları"),
       h("div",{class:"field"}, h("label",{for:"nk"},"Takma ad (sınıf tablosunda görünür)"), inp),
-      h("label",{class:"check"}, chk, h("span",null,"Sınıf tablosunda görün")),
+      h("label",{class:"check"}, chk, h("span",null,"Sınıf tablosunda görün")), cloudStatusRow(),
       h("div",{class:"row",style:{marginTop:"10px"}},
         h("button",{class:"btn soft sm",onclick:()=>{ close(); scoreCard(); }},"📋 Skor kartım"),
         h("button",{class:"btn soft sm",onclick:()=>{ close(); setView(IS_M()?"web":"mobile"); }}, IS_M()?"🖥 Web görünümü":"📱 Mobil görünüm"),
+        h("button",{class:"btn soft sm",onclick:()=>{ close(); teacherPanel(); }},"👩‍🏫 Öğretmen paneli"),
         DEMO? h("button",{class:"btn soft sm",onclick:exitDemo},"Demodan çık") : h("button",{class:"btn soft sm",onclick:()=>{ try{localStorage.setItem("tepsi.mode","demo");}catch(e){} location.reload(); }},"🧪 Demo modunu aç")),
 
       h("div",{class:"row",style:{justifyContent:"space-between",marginTop:"16px"}},
         h("button",{class:"btn ghost",onclick:()=>{ close(); ask("İlerleme sıfırlansın mı?","Puan, jeton, satın alınanlar, rozetler ve tekrar listen bu cihazdan silinir; sınıf tablosundaki satırın da kaldırılır. Takma adın kalır.","Sıfırla",()=>{ const keepNick=S.nick; S=freshProfile(); S.nick=keepNick; SEL=new Set(S.sel); save(); applyTheme(); removeFromBoard(); home(); }); }},"İlerlemeyi sıfırla"),
-        h("button",{class:"btn",onclick:()=>{ const was=S.onBoard; S.nick=inp.value.trim().slice(0,24); S.onBoard=chk.checked; save(); if(was && !S.onBoard) removeFromBoard(); else pushBoard(); close(); home(); }},"Kaydet"))));
+        h("button",{class:"btn",onclick:()=>{ const was=S.onBoard; if(!(FB.want && accSaved())) S.nick=inp.value.trim().slice(0,24); S.onBoard=chk.checked; save(); if(was && !S.onBoard) removeFromBoard(); else pushBoard(); close(); home(); }},"Kaydet"))));
   const esc = e=>{ if(e.key==="Escape") close(); };
   document.addEventListener("keydown",esc);
   document.body.append(m); inp.focus();
@@ -4769,7 +4887,9 @@ function finish(g){
 }
 
 /* ---------- boot ---------- */
-if(gateOk()) home(); else gateScreen();
+let ckOk=true; try{ ckOk=!!localStorage.getItem("tepsi.ck"); }catch(e){}
+if(!gateOk() || (FB.want && !ckOk)) gateScreen(); else if(FB.want && !accSaved()) accountScreen(); else home();
+if(FB.want) fbBoot();
 initNet();
 })();
 
