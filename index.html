@@ -2,6 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tepsi · diş hekimliği bilgi oyunu</title>
 <style>
@@ -690,6 +691,13 @@ html.m-mode .spin-svg{width:88px;height:88px}
 .study-chip.low{border-color:#f39c12;background:color-mix(in srgb,#f39c12 12%,var(--surface))}
 .m-chip.warn{background:#fff3e0;border-color:#f39c12;color:#e65100}
 html.m-mode .cols>aside>.study-card{display:block}
+.gate{min-height:80vh;display:grid;place-items:center}
+.gate-box{width:min(380px,100%);background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:28px 22px;text-align:center;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
+.gate-logo{font-size:3rem;line-height:1}
+.gate-box h1{margin:0}
+.gate-box input{font-size:1.2rem;text-align:center;letter-spacing:.12em;padding:12px;border-radius:12px;border:2px solid var(--line);background:var(--surface-2);color:var(--ink);text-transform:uppercase}
+.gate-box input:focus{outline:none;border-color:var(--accent)}
+.gate-msg{color:#c0392b;min-height:1.2em;margin:0}
 
 </style>
 </head>
@@ -4222,6 +4230,26 @@ function studyGoalCard(){
 function studyChip(){ const n=studyToday(), m=studyMult();
   return h("button",{class:"study-chip"+(m<1?" low":""),onclick:()=>start("quiz"),title:"Soru çöz, kliniğin verimi artsın"}, `📚 Bugün ${n}/${STUDY_GOAL} soru · klinik verimi %${Math.round(m*100)}`+(m<1?" · çözmek için dokun":"")); }
 
+/* ---------- sınıf kodu girişi ---------- */
+const GATE_HASH="1e3392-7f3eacd5";
+function gateHash(str){ let h1=0xdeadbeef^7, h2=0x41c6ce57^7; for(let i=0;i<str.length;i++){ const ch=str.charCodeAt(i); h1=Math.imul(h1^ch,2654435761); h2=Math.imul(h2^ch,1597334677); }
+  h1=Math.imul(h1^(h1>>>16),2246822507); h1^=Math.imul(h2^(h2>>>13),3266489909); h2=Math.imul(h2^(h2>>>16),2246822507); h2^=Math.imul(h1^(h1>>>13),3266489909);
+  return (2097151&h2).toString(16)+"-"+(h1>>>0).toString(16); }
+function gateNorm(s){ return String(s||"").replace(/İ/g,"I").replace(/ı/g,"i").toUpperCase().replace(/\s+/g,""); }
+function gateOk(){ try{ return localStorage.getItem("tepsi.gate")===GATE_HASH; }catch(e){ return false; } }
+function gateScreen(){
+  CUR_TAB=null;
+  const inp=h("input",{type:"text",id:"gatecode",autocomplete:"off",autocapitalize:"characters",spellcheck:"false",placeholder:"Sınıf kodu","aria-label":"Sınıf kodu"});
+  const msg=h("p",{class:"small gate-msg","aria-live":"polite"});
+  const go=()=>{ if(gateHash(gateNorm(inp.value))===GATE_HASH){ try{ localStorage.setItem("tepsi.gate",GATE_HASH); }catch(e){} home(); toast("Hoş geldin! 🦷"); } else { msg.textContent="Kod yanlış. Kodu öğretmeninden alabilirsin."; inp.select(); } };
+  inp.addEventListener("keydown",e=>{ if(e.key==="Enter") go(); });
+  screen(h("div",{class:"wrap narrow gate"}, h("div",{class:"gate-box"},
+    h("div",{class:"gate-logo","aria-hidden":"true"},"🦷"), h("h1",null,"Tepsi"),
+    h("p",{class:"muted"},"Bu oyun yalnızca sınıfımızın öğrencilerine açıktır. Öğretmeninin verdiği sınıf kodunu gir."),
+    inp, h("button",{class:"btn",onclick:go},"Giriş yap"), msg)));
+  setTimeout(()=>inp.focus(),50);
+}
+
 /* ---------- settings ---------- */
 function openSettings(){
   const inp = h("input",{type:"text",maxlength:"24",value:S.nick,placeholder:"ör. DavyeKralı",id:"nk",autocomplete:"off"});
@@ -4741,7 +4769,7 @@ function finish(g){
 }
 
 /* ---------- boot ---------- */
-home();
+if(gateOk()) home(); else gateScreen();
 initNet();
 })();
 
