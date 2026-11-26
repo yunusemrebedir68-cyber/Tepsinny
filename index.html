@@ -4233,7 +4233,8 @@ function scene3D(T,stage,tools,overlay,opts,snap){
     const top=kind==="dentist"?"#ffffff":kind==="assistant"?"#26a69a":kind==="desk"?"#1c7562":["#e57373","#64b5f6","#ffb74d","#81c784","#ba68c8","#4db6ac"][seed%6];
     const legs=kind==="dentist"?"#90a4ae":kind==="assistant"?"#1e8e7e":["#37474f","#5d4037","#283593","#455a64"][seed%4];
     if(sit){ B(g,.26,.12,.3,legs,0,.38,.08); B(g,.1,.38,.1,legs,-.07,0,.22); B(g,.1,.38,.1,legs,.07,0,.22); Cy(g,.14,.4,top,0,.46,-.04); Sp(g,.11,sk,0,1.0,-.04); Sp(g,.113,hr,0,1.04,-.06); return g; }
-    B(g,.1,.42,.1,legs,-.065,0,0); B(g,.1,.42,.1,legs,.065,0,0); Cy(g,.15,.44,top,0,.42,0); B(g,.07,.34,.07,top,-.19,.5,0); B(g,.07,.34,.07,top,.19,.5,0);
+    const limb=(x,y,w,hh,c)=>{ const pv=new T.Group(); pv.position.set(x,y,0); g.add(pv); B(pv,w,hh,w,c,0,-hh,0); return pv; };
+    const lL=limb(-.065,.42,.1,.42,legs), lR=limb(.065,.42,.1,.42,legs); Cy(g,.15,.44,top,0,.42,0); const aL=limb(-.19,.84,.07,.34,top), aR=limb(.19,.84,.07,.34,top); g.userData.limbs=[lL,lR,aL,aR];
     Sp(g,.115,sk,0,1.0,0); Sp(g,.118,kind==="assistant"||kind==="dentist"?(kind==="assistant"?"#26a69a":"#e3f2fd"):hr,0,1.05,-.01);
     if(kind==="dentist"||kind==="assistant") B(g,.16,.07,.03,"#b3e5fc",0,.94,.11);
     return g; }
@@ -4386,6 +4387,38 @@ function scene3D(T,stage,tools,overlay,opts,snap){
     if(avg>=4 || (r.id==="reception"&&snap.rk>=3)){ const pl=new T.PointLight(0xffcf8a, night?1.1:.55, Math.max(r.w,r.d)*1.6, 2); pl.position.set(r.x+r.w/2,2.1,r.y+r.d/2); scene.add(pl);
       if(dr) B(scene,dr.nx?.12:1,.012,dr.ny?.12:1,M("#d4af37",{metalness:.8,roughness:.3}),dr.x+.5+(dr.nx||0)*.44,.14,dr.y+.5+(dr.ny||0)*.44); }
   }
+  /* --- koridor bekleme köşeleri, tablolar, aplikler --- */
+  if(built && build>=3){
+    const isC=(x,y)=>inArea(x,y)&&!inRoom(x,y);
+    const block=new Set(); rooms.forEach(r=>{ if(r.door){ block.add(r.door.ox+","+r.door.oy); } }); for(let k=1;k<=3;k++) block.add(ent.x+","+(D-k));
+    (C.decor||[]).forEach(dc=>block.add((dc.x-snap.BX)+","+(dc.y-snap.BY)));
+    const ART=[["#264653","#2a9d8f","#e9c46a"],["#8ecae6","#219ebc","#ffb703"],["#f4a261","#e76f51","#2a9d8f"],["#a8dadc","#457b9d","#1d3557"],["#ffcad4","#f4acb7","#9d8189"],["#b7e4c7","#52b788","#1b4332"]];
+    const painting=(x,y,z,rotY,k)=>{ const g=G(x,z,rotY); const pal=ART[k%ART.length]; B(g,.78,.58,.04,"#5d4037",0,y,0); B(g,.7,.5,.02,"#fdfaf3",0,y+.04,.025);
+      if(k%3===0){ B(g,.7,.22,.021,pal[0],0,y+.32,.03); B(g,.7,.14,.021,pal[1],0,y+.18,.03); Sp(g,.07,pal[2],.18,y+.44,.04).scale.set(1,1,.2); }
+      else if(k%3===1){ [[-.2,pal[0]],[0,pal[1]],[.2,pal[2]]].forEach(([dx,c],i)=>B(g,.15,.18+i*.08,.021,c,dx,y+.1,.03)); }
+      else { B(g,.6,.4,.021,"#e3f2fd",0,y+.09,.03); Sp(g,.12,"#ffffff",0,y+.32,.04).scale.set(.8,1,.2); B(g,.32,.04,.021,"#26a69a",0,y+.14,.035); }
+      return g; };
+    const sconce=(x,z,rotY)=>{ const g=G(x,z,rotY); B(g,.16,.12,.06,night?GLOW("#ffe0a3",1.6):M("#fff3d6",{emissive:"#ffe0a3",emissiveIntensity:.25}),0,1.85,.04); };
+    // dış arka duvarlar boyunca tablolar ve aplikler (koridora bakan yerlerde)
+    let pk=0;
+    for(let x=0;x<W;x++){ if(isC(x,0) && x%3===1){ painting(x+.5,1.15,.14,0,pk++); sconce(x+.5+(x%2?.6:-.6),.14,0); } }
+    for(let y=0;y<D;y++){ if(isC(0,y) && y%3===1){ painting(.14,1.15,y+.5,Math.PI/2,pk++); } }
+    // oturma köşeleri: duvara (dış duvar veya oda duvarı) yaslanan, karşısı koridor olan karolar
+    const seatRow=(x,z,rotY,col,occ)=>{ const g=G(x,z,rotY); g.position.y=.12; B(g,.9,.04,.36,"#90a4ae",0,.36,0); [-.4,.4].forEach(dx=>B(g,.05,.36,.3,"#78909c",dx,0,0));
+      [-.29,0,.29].forEach((dx,i)=>{ B(g,.26,.06,.32,col,dx,.4,0,{roughness:.5}); B(g,.26,.3,.05,col,dx,.46,-.15,{roughness:.5}); }); if(occ) person(g,.29,.06,0,"patient",occ,true); };
+    const nookItem=(x,z,rotY,k)=>{ const g=G(x,z,rotY); g.position.y=.12;
+      if(k===0){ Cy(g,.2,.42,"#eceff1",0,0,0); Sp(g,.36,"#2e7d32",0,.75,0); Sp(g,.26,"#43a047",.12,1.0,.05); Sp(g,.2,"#66bb6a",-.12,.95,-.05); }
+      else if(k===1){ B(g,.3,.9,.3,"#f5f5f5",0,0,0); Cy(g,.12,.36,M("#81d4fa",{transparent:true,opacity:.75,roughness:.1}),0,.9,0); B(g,.08,.06,.05,"#1e88e5",-.06,.55,.16); B(g,.08,.06,.05,"#e53935",.06,.55,.16); }
+      else { Cy(g,.25,.03,"#c08552",0,.42,0); Cy(g,.03,.42,"#8d6e63",0,0,0); B(g,.2,.02,.14,"#e57373",-.06,.45,.02); B(g,.2,.02,.14,"#64b5f6",.05,.47,-.03); }
+      return g; };
+    const COLS=["#26a69a","#ef8354","#5c6bc0","#f2c14e"]; let nk=0;
+    for(let y=0;y<D;y++) for(let x=0;x<W;x++){ if(!isC(x,y) || block.has(x+","+y)) continue;
+      const wallN=(y===0||inRoom(x,y-1)) && isC(x,y+1), wallW=(x===0||inRoom(x-1,y)) && isC(x+1,y), wallS=(y===D-1||inRoom(x,y+1)) && isC(x,y-1), wallE=(x===W-1||inRoom(x+1,y)) && isC(x-1,y);
+      if(!(wallN||wallW||wallS||wallE)) continue; if((x*7+y*3)%3!==0) continue;
+      const [px,pz,ro]= wallN? [x+.5,y+.24,0] : wallW? [x+.24,y+.5,Math.PI/2] : wallS? [x+.5,y+.76,Math.PI] : [x+.76,y+.5,-Math.PI/2];
+      const kind=nk%4; if(kind===3) nookItem(px,pz,ro,Math.floor(nk/4)%3); else seatRow(px,pz,ro,COLS[nk%COLS.length], ANIM&&nk%3===1? nk*11+5 : 0);
+      nk++; }
+  }
   /* --- dekorlar --- */
   (C.decor||[]).forEach(dc=>{ const x=dc.x-snap.BX+.5, z=dc.y-snap.BY+.5, t=dc.t;
     if(["agac","kiraz","cam","palmiye","limon"].includes(t)) tree(scene,x,z,t==="limon"?.55:.95,t);
@@ -4487,7 +4520,7 @@ function scene3D(T,stage,tools,overlay,opts,snap){
     const tp=(a,b)=>{ const t=gridPath(a,b,walk); return t? t.map(q=>[q[0]+.5,q[1]+.5]) : null; };
     const pickR=a=>a[Math.floor(Math.random()*a.length)];
     const visitRooms=rooms.filter(r=>r.ok&&r.door&&r.id!=="reception");
-    const mkW=(seed)=>{ const g=new T.Group(); g.position.set(-30,.12,D+2.4); g.userData.dyn=true; scene.add(g);
+    const mkW=(seed)=>{ const g=new T.Group(); g.position.set(-30,.04,D+2.4); g.userData.dyn=true; scene.add(g);
       const stand=person(g,0,0,0,"patient",seed), sit=person(g,0,0,0,"patient",seed,true), lie=lyingPatient(g,seed);
       sit.visible=false; lie.visible=false; return {g,stand,sit,lie,ops:[],k:0,p:0,t:0,seed}; };
     const pose=(w,m)=>{ w.stand.visible=m==="stand"; w.sit.visible=m==="sit"; w.lie.visible=m==="lie"; };
@@ -4511,18 +4544,20 @@ function scene3D(T,stage,tools,overlay,opts,snap){
     const n=mob? 7 : 12;
     for(let i=0;i<n;i++){ const w=mkW(i*5+2); w.delay=i*1.4; w.g.visible=false; walkers.push(w); }
     for(let i=0;i<(mob?4:8);i++){ const g=person(scene,0,0,0,"patient",i*7+3); g.userData.dyn=true; g.position.y=.12; const dir=i%2?1:-1; passers.push({g,dir,x:-14+Math.random()*(W+28),z:D+(dir>0?1.95:2.85),v:.9+Math.random()*.5,seed:i}); }
+    const stride=(g,now,seed)=>{ const L=g.userData.limbs; if(!L) return; const a=Math.sin(now/170+seed); L[0].rotation.x=a*.55; L[1].rotation.x=-a*.55; L[2].rotation.x=-a*.45; L[3].rotation.x=a*.45; };
+    const still=g=>{ const L=g.userData.limbs; if(L) L.forEach(l=>l.rotation.x=0); };
     var stepWalkers=(dt,now)=>{
-      passers.forEach(q=>{ q.x+=q.dir*q.v*dt; if(q.x>W+16) q.x=-16; if(q.x<-16) q.x=W+16; q.g.position.set(q.x,.12+Math.abs(Math.sin(now/150+q.seed))*.035,q.z); q.g.rotation.y=q.dir>0?Math.PI/2:-Math.PI/2; });
+      passers.forEach(q=>{ q.x+=q.dir*q.v*dt; if(q.x>W+16) q.x=-16; if(q.x<-16) q.x=W+16; q.g.position.set(q.x,.04+Math.abs(Math.sin(now/170+q.seed))*.018,q.z); stride(q.g,now,q.seed); q.g.rotation.y=q.dir>0?Math.PI/2:-Math.PI/2; });
       walkers.forEach(w=>{
       if(w.delay>0){ w.delay-=dt; return; }
       if(!w.ops.length || w.k>=w.ops.length){ plan(w); w.g.visible=true; pose(w,"stand"); }
       const op=w.ops[w.k]; if(!op) return;
-      if(op.wait!=null){ if(op.hide) w.g.visible=false; w.t+=dt; if(w.t>=op.wait){ w.t=0; w.k++; } return; }
-      if(op.pose){ if(w.t===0){ pose(w,op.pose); w.g.position.set(op.x,.12,op.z); w.g.rotation.y=op.rot; } w.t+=dt; if(w.t>=op.dur){ w.t=0; w.k++; if(op.free) op.free.busy=false; pose(w,"stand"); } return; }
+      if(op.wait!=null){ still(w.stand); if(op.hide) w.g.visible=false; w.t+=dt; if(w.t>=op.wait){ w.t=0; w.k++; } return; }
+      if(op.pose){ if(w.t===0){ still(w.stand); pose(w,op.pose); w.g.position.set(op.x,.12,op.z); w.g.rotation.y=op.rot; } w.t+=dt; if(w.t>=op.dur){ w.t=0; w.k++; if(op.free) op.free.busy=false; pose(w,"stand"); } return; }
       if(op.move){ const P=op.move; if(P.length<2){ w.k++; return; } if(!op.len){ op.seg=[]; op.len=0; for(let i=0;i<P.length-1;i++){ const l=Math.hypot(P[i+1][0]-P[i][0],P[i+1][1]-P[i][1]); op.seg.push(l); op.len+=l; } }
         w.g.visible=true; w.p+=dt*1.3; let dd=Math.min(w.p,op.len);
         for(let i=0;i<op.seg.length;i++){ if(dd<=op.seg[i]||i===op.seg.length-1){ const f=op.seg[i]?Math.min(1,dd/op.seg[i]):1; const x=P[i][0]+(P[i+1][0]-P[i][0])*f, z=P[i][1]+(P[i+1][1]-P[i][1])*f;
-            w.g.position.set(x,.12+Math.abs(Math.sin(now/150+w.seed))*.035,z); if(op.seg[i]>.01) w.g.rotation.y=Math.atan2(P[i+1][0]-P[i][0],P[i+1][1]-P[i][1]); break; } dd-=op.seg[i]; }
+            const inB=x>=0&&x<=W&&z>=0&&z<=D; w.g.position.set(x,(inB?.12:.04)+Math.abs(Math.sin(now/170+w.seed))*.018,z); stride(w.stand,now,w.seed); if(op.seg[i]>.01) w.g.rotation.y=Math.atan2(P[i+1][0]-P[i][0],P[i+1][1]-P[i][1]); break; } dd-=op.seg[i]; }
         if(w.p>=op.len){ w.p=0; w.k++; } } }); };
   }
   mergeStatic3D(T,scene);
